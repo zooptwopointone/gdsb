@@ -46,8 +46,8 @@ func getResourceDir(env string) (string, error) {
 			resourceDir = os.Getenv(env)
 		}
 		if len(resourceDir) == 0 {
-			log.Panic("Resource dir evironement is empty... Please set TINIIFY_RESOURCE env or place config file in current directory")
-			return resourceDir, errors.New("Resource dir evironement is empty... Please set TINIIFY_RESOURCE env or place config file in current directory")
+			log.Panic("Resource dir evironement is empty... Please set GDSB_RESOURCE env or place config file in current directory")
+			return resourceDir, errors.New("Resource dir evironement is empty... Please set GDSB_RESOURCE env or place config file in current directory")
 		}
 		return resourceDir, nil
 	}
