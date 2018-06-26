@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	uuid "github.com/satori/go.uuid"
 )
@@ -28,8 +29,20 @@ func UUIDstring() string {
 //ToJSON takes object o and returns string and error
 func ToJSON(o interface{}) (string, error) {
 	j, e := json.Marshal(o)
-	if e != nil {
+	if e == nil {
 		return string(j), e
 	}
 	return "", e
+}
+
+//UTCNow is to generate utc time
+func UTCNow() time.Time {
+	loc, _ := time.LoadLocation("UTC")
+	return time.Now().In(loc)
+}
+
+//UTCMilisec is to generate utc time milisecond
+func UTCMilisec() int64 {
+	v := UTCNow().UnixNano() / 1000000
+	return v
 }

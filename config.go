@@ -33,7 +33,7 @@ func loadConfigurationsFromDir(resourcesDir string, configuration Configuration)
 func LoadConfigurations(c Configuration) error {
 	resourceDir, _ := getResourceDir(c.EnvName)
 	if err := loadConfigurationsFromDir(resourceDir, c); err != nil {
-		log.Panic("Error while loading Configuration. Error", err)
+		log.Panicf("Error while loading Configuration. Error: %v", err)
 		return err
 	}
 	return nil

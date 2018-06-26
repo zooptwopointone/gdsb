@@ -29,6 +29,7 @@ type KafkaConf struct {
 type KafkaMessage struct {
 	Offset         kafka.Offset
 	Message        string
+	MessageBytes   []byte
 	PartitionIndex int32
 	Key            string
 }
@@ -158,6 +159,7 @@ func handleKafkaMessage(e *kafka.Message, ch chan KafkaMessage) {
 		Offset:         e.TopicPartition.Offset,
 		Key:            string(e.Key),
 		Message:        string(e.Value),
+		MessageBytes:   e.Value,
 		PartitionIndex: e.TopicPartition.Partition}
 	if alreadyProcessed(m.Key) == false {
 		ch <- m
