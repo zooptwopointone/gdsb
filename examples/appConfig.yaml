@@ -1,14 +1,14 @@
 Cassandra:
-  Hosts: "id2224la.ytel.com"
+  Hosts: "localhost.com"
   Port: 9042
   Username: "dialer"
-  Password: "\\0b4s2ZRrVE?WZ.p"
+  Password: "jksbfisdbfv"
   Keyspace: "message360"
   Timeout: 10
 Appname: "LocalTestApp"
 KafkaProducerConfig: 
   Config: 
-  - "bootstrap.servers=172.21.8.21:9092"
+  - "bootstrap.servers=127.0.0.1:9092"
   - "acks=0"
   - "retries=5"
   - "linger.ms=200"
@@ -18,7 +18,7 @@ KafkaProducerConfig:
   KeyEnabled: true
 KafkaConsumerConfig: 
   Config: 
-  - "bootstrap.servers=172.21.8.21:9092"
+  - "bootstrap.servers=127.0.0.1:9092"
   - "acks=0"
   - "retries=5"
   - "linger.ms=200"
