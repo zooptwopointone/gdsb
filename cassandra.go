@@ -1,7 +1,7 @@
 package gdsb
 
 /*
-	Copyright 2018 Rewati Raman rewati.raman@gmail.com
+	Copyright 2018 Rewati Raman rewati.raman@gmail.com https://github.com/rewati/gdsb
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
