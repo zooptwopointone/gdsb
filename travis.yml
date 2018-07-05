@@ -16,3 +16,4 @@ sudo: false
 os:
     - linux
     - osx
+    
