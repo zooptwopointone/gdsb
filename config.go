@@ -32,7 +32,7 @@ type Configuration struct {
 //LoadConfigurationsFromDir Load Configurations From Dir
 func loadConfigurationsFromDir(resourcesDir string, configuration Configuration) error {
 	v := viper.New()
-	v.SetConfigName("appConfig")
+	v.SetConfigName("appConfig.yaml")
 	v.SetConfigType("yaml")
 	v.AddConfigPath(resourcesDir)
 	if err := v.ReadInConfig(); err != nil {
