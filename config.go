@@ -29,6 +29,13 @@ type Configuration struct {
 	EnvName string
 }
 
+//ServerConfig is for the server Configurations
+type ServerConfig struct {
+	WriteTimeoutInMili int32
+	ReadTimeoutInMili  int32
+	Address            string
+}
+
 //LoadConfigurationsFromDir Load Configurations From Dir
 func LoadConfigurationsFromDir(resourcesDir string, configuration Configuration) error {
 	v := viper.New()
