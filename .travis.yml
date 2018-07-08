@@ -26,9 +26,7 @@ before_install:
 
 
 install:
-  - go get -tags static ./...
-  - go install -tags static ./...
-
+  - go get ./...
 
 script:
  - go build
