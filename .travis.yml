@@ -27,6 +27,4 @@ before_install:
 
 install:
   - go get ./...
-
-script:
- - go build
+  - go install ./...
