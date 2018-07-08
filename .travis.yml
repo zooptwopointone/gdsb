@@ -26,5 +26,5 @@ before_install:
   - bash mk/bootstrap-librdkafka.sh ${LIBRDKAFKA_VERSION} tmp-build
 
 install:
-  - - dep ensure
+  - $GOPATH/bin/dep ensure
   - go build -tags static ./...
