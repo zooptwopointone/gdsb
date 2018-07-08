@@ -4,8 +4,6 @@ os:
   - osx
 
 language: go
-go:
- - tip
 
 install:
  - go get ./...
