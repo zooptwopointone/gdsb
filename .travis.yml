@@ -22,10 +22,6 @@ env:
 before_install:
   - rm -rf tmp-build
   - bash mk/bootstrap-librdkafka.sh ${LIBRDKAFKA_VERSION} tmp-build
-  - go get github.com/confluentinc/confluent-kafka-go/kafka
-  - go get -u github.com/golang/lint/golint
-  - if [[ $TRAVIS_OS_NAME == osx && $TRAVIS_GO_VERSION =~ ^1\.[78] ]] ; then touch .no_exec ; fi
 
 install:
-  - go get -tags static ./...
-  - go install -tags static ./...
+  - go build -tags static ./...
