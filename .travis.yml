@@ -8,18 +8,12 @@ go:
 
 env:
   global:
-    - PKG_CONFIG_PATH="$HOME/gopath/src/github.com/confluentinc/confluent-kafka-go/tmp-build/lib/pkgconfig"
-    - LD_LIBRARY_PATH="$HOME/gopath/src/github.com/confluentinc/confluent-kafka-go/tmp-build/lib"
-    - DYLD_LIBRARY_PATH="$HOME/gopath/src/github.com/confluentinc/confluent-kafka-go/tmp-build/lib"
     - PATH="$PATH:$GOPATH/bin"
-    - LIBRDKAFKA_VERSION=master
 
 # Travis OSX worker has problems running our Go binaries for 1.7 and 1.8,
 # workaround for now is to skip exec for those.
 
 before_install:
-  - rm -rf tmp-build
-  - bash mk/bootstrap-librdkafka.sh ${LIBRDKAFKA_VERSION} tmp-build
   - git clone https://github.com/edenhill/librdkafka.git
   - cd librdkafka
   - ./configure 
