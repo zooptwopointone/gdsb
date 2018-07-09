@@ -1,8 +1,6 @@
 sudo: required
-osx_image: xcode9.2
 os:
   - linux
-  - osx
 
 language: go
 go:
@@ -24,7 +22,7 @@ before_install:
   - bash mk/bootstrap-librdkafka.sh ${LIBRDKAFKA_VERSION} tmp-build
   - git clone https://github.com/edenhill/librdkafka.git
   - cd librdkafka
-  - ./configure --prefix /usr
+  - ./configure 
   - make
   - sudo make install
   - export PKG_CONFIG_PATH="$HOME/gopath/src/github.com/confluentinc/confluent-kafka-go/tmp-build/lib/pkgconfig"
