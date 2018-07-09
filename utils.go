@@ -51,7 +51,7 @@ func UTCNow() time.Time {
 	return time.Now().In(loc)
 }
 
-//UTCMilisec is to generate utc time milisecond
+//UTCMilisec is to generate utc time millisecond
 func UTCMilisec() int64 {
 	v := UTCNow().UnixNano() / 1000000
 	return v

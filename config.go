@@ -45,10 +45,8 @@ func LoadConfigurationsFromDir(resourcesDir string, configuration Configuration)
 	if err := v.ReadInConfig(); err != nil {
 		return err
 	}
-	if err := v.Unmarshal(&configuration.Config); err != nil {
-		return err
-	}
-	return nil
+	err := v.Unmarshal(&configuration.Config)
+	return err
 }
 
 //LoadConfigurations loads configurations

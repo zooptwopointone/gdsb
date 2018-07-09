@@ -21,6 +21,7 @@ var c = struct {
 var sent = 0
 var received = 0
 
+//Ast is sample structure for json test
 type Ast struct {
 	ID  string `json:"messageId"`
 	DID string `json:"messageDId"`
