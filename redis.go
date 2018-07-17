@@ -49,6 +49,8 @@ func CreateSentinelConnection(config RedisConfig) *redis.Client {
 	client := redis.NewFailoverClient(&redis.FailoverOptions{
 		MasterName:    config.Master,
 		SentinelAddrs: strings.Split(config.Hosts, ","),
+		Password:      config.Password,
+		DB:            config.DB,
 	})
 	return client
 }

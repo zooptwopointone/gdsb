@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -28,40 +27,40 @@ type Ast struct {
 }
 
 func main() {
-	g := []struct {
-		Name string
-		Age  int
-		Dept string
-	}{
-		{Name: "rt", Age: 45},
-		{Name: "rt1", Age: 456, Dept: "HR"},
-	}
+	// g := []struct {
+	// 	Name string
+	// 	Age  int
+	// 	Dept string
+	// }{
+	// 	{Name: "rt", Age: 45},
+	// 	{Name: "rt1", Age: 456, Dept: "HR"},
+	// }
 	var configuration = gdsb.Configuration{Config: &c}
 	if err := gdsb.LoadConfigurations(configuration); err != nil {
 		log.Panic("Error in configuration")
 	}
-	ast := Ast{ID: "id123", DID: "did123"}
-	b, e1 := gdsb.ToJSON(&ast)
-	fmt.Printf("%v | %v\n", string(b), e1)
-	var a Ast
-	json.Unmarshal([]byte(string(b)), &a)
-	fmt.Printf("AST: %v ", a)
-	redisExample()
-	fmt.Printf("Cassandra config: %v", c.Cassandra)
-	go kafkaConsumerExample()
-	kafkaExample()
-	run := true
-	for run == true {
-		sent++
-		if sent%10 == 0 {
-			log.Println("Total sent: ", sent)
-		}
-		if sent == 1000 {
-			run = false
-		}
-		time.Sleep(1 * time.Second)
-		gdsb.Produce(gdsb.KfMsg{Topic: "rewati_test", Object: g, Key: gdsb.UUIDstring()})
-	}
+	// ast := Ast{ID: "id123", DID: "did123"}
+	// b, e1 := gdsb.ToJSON(&ast)
+	// fmt.Printf("%v | %v\n", string(b), e1)
+	// var a Ast
+	// json.Unmarshal([]byte(string(b)), &a)
+	// fmt.Printf("AST: %v ", a)
+	// redisExample()
+	// fmt.Printf("Cassandra config: %v", c.Cassandra)
+	kafkaConsumerExample()
+	// kafkaExample()
+	// run := true
+	// for run == true {
+	// 	sent++
+	// 	if sent%10 == 0 {
+	// 		log.Println("Total sent: ", sent)
+	// 	}
+	// 	if sent == 1000 {
+	// 		run = false
+	// 	}
+	// 	time.Sleep(1 * time.Second)
+	// 	gdsb.Produce(gdsb.KfMsg{Topic: "rewati_test", Object: g, Key: gdsb.UUIDstring()})
+	// }
 	gdsb.Hold()
 }
 
