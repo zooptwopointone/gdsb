@@ -60,7 +60,7 @@ func LoadConfigurations(c Configuration) error {
 }
 
 func getResourceDir(env string) (string, error) {
-	if _, err := os.Stat("./appConfig.yaml"); os.IsNotExist(err) {
+	if _, err := os.Stat("./application.yaml"); os.IsNotExist(err) {
 		var resourceDir string
 		if len(env) != 0 {
 			resourceDir = os.Getenv(env)
