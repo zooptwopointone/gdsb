@@ -17,13 +17,17 @@ package kafka
  */
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
+	"testing"
+	"time"
 )
 
 /*
-#include <librdkafka/rdkafka.h>
+#include "select_rdkafka.h"
 */
 import "C"
 
@@ -96,11 +100,15 @@ func (cm *ConfigMap) updateFromTestconf() error {
 func getMessageCountInTopic(topic string) (int, error) {
 
 	// Create consumer
-	c, err := NewConsumer(&ConfigMap{"bootstrap.servers": testconf.Brokers,
-		"group.id": testconf.GroupID})
+	config := &ConfigMap{"bootstrap.servers": testconf.Brokers,
+		"group.id": testconf.GroupID}
+	config.updateFromTestconf()
+
+	c, err := NewConsumer(config)
 	if err != nil {
 		return 0, err
 	}
+	defer c.Close()
 
 	// get metadata for the topic to find out number of partitions
 
@@ -124,4 +132,117 @@ func getMessageCountInTopic(topic string) (int, error) {
 	}
 
 	return cnt, nil
+}
+
+// getBrokerList returns a list of brokers (ids) in the cluster
+func getBrokerList(H Handle) (brokers []int32, err error) {
+	md, err := getMetadata(H, nil, true, 15*1000)
+	if err != nil {
+		return nil, err
+	}
+
+	brokers = make([]int32, len(md.Brokers))
+	for i, mdBroker := range md.Brokers {
+		brokers[i] = mdBroker.ID
+	}
+
+	return brokers, nil
+}
+
+// waitTopicInMetadata waits for the given topic to show up in metadata
+func waitTopicInMetadata(H Handle, topic string, timeoutMs int) error {
+	d, _ := time.ParseDuration(fmt.Sprintf("%dms", timeoutMs))
+	tEnd := time.Now().Add(d)
+
+	for {
+		remain := tEnd.Sub(time.Now()).Seconds()
+		if remain < 0.0 {
+			return newErrorFromString(ErrTimedOut,
+				fmt.Sprintf("Timed out waiting for topic %s to appear in metadata", topic))
+		}
+
+		md, err := getMetadata(H, nil, true, int(remain*1000))
+		if err != nil {
+			return err
+		}
+
+		for _, t := range md.Topics {
+			if t.Topic != topic {
+				continue
+			}
+			if t.Error.Code() != ErrNoError || len(t.Partitions) < 1 {
+				continue
+			}
+			// Proper topic found in metadata
+			return nil
+		}
+
+		time.Sleep(500 * 1000) // 500ms
+	}
+
+}
+
+func createAdminClient(t *testing.T) (a *AdminClient) {
+	numver, strver := LibraryVersion()
+	if numver < 0x000b0500 {
+		t.Skipf("Requires librdkafka >=0.11.5 (currently on %s, 0x%x)", strver, numver)
+	}
+
+	if !testconfRead() {
+		t.Skipf("Missing testconf.json")
+	}
+
+	conf := ConfigMap{"bootstrap.servers": testconf.Brokers}
+	conf.updateFromTestconf()
+
+	/*
+	 * Create producer and produce a couple of messages with and without
+	 * headers.
+	 */
+	a, err := NewAdminClient(&conf)
+	if err != nil {
+		t.Fatalf("NewAdminClient: %v", err)
+	}
+
+	return a
+}
+
+func createTestTopic(t *testing.T, suffix string, numPartitions int, replicationFactor int) string {
+	rand.Seed(time.Now().Unix())
+
+	topic := fmt.Sprintf("%s-%s-%d", testconf.Topic, suffix, rand.Intn(100000))
+
+	a := createAdminClient(t)
+	defer a.Close()
+
+	newTopics := []TopicSpecification{
+		{
+			Topic:             topic,
+			NumPartitions:     numPartitions,
+			ReplicationFactor: replicationFactor,
+		},
+	}
+
+	maxDuration, err := time.ParseDuration("30s")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxDuration)
+	defer cancel()
+	result, err := a.CreateTopics(ctx, newTopics, nil)
+	if err != nil {
+		t.Fatalf("CreateTopics() failed: %s", err)
+	}
+
+	for _, res := range result {
+		if res.Error.Code() != ErrNoError {
+			t.Errorf("Failed to create topic %s: %s\n",
+				res.Topic, res.Error)
+			continue
+		}
+
+	}
+
+	return topic
 }

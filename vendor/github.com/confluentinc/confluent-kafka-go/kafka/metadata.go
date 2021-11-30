@@ -22,7 +22,7 @@ import (
 
 /*
 #include <stdlib.h>
-#include <librdkafka/rdkafka.h>
+#include "select_rdkafka.h"
 
 struct rd_kafka_metadata_broker *_getMetadata_broker_element(struct rd_kafka_metadata *m, int i) {
   return &m->brokers[i];
@@ -94,6 +94,7 @@ func getMetadata(H Handle, topic *string, allTopics bool, timeoutMs int) (*Metad
 	}
 
 	m := Metadata{}
+	defer C.rd_kafka_metadata_destroy(cMd)
 
 	m.Brokers = make([]BrokerMetadata, cMd.broker_cnt)
 	for i := 0; i < int(cMd.broker_cnt); i++ {
@@ -153,5 +154,27 @@ func queryWatermarkOffsets(H Handle, topic string, partition int32, timeoutMs in
 
 	low = int64(cLow)
 	high = int64(cHigh)
+	return low, high, nil
+}
+
+// getWatermarkOffsets returns the clients cached low and high offsets for the given topic
+// and partition.
+func getWatermarkOffsets(H Handle, topic string, partition int32) (low, high int64, err error) {
+	h := H.gethandle()
+
+	ctopic := C.CString(topic)
+	defer C.free(unsafe.Pointer(ctopic))
+
+	var cLow, cHigh C.int64_t
+
+	e := C.rd_kafka_get_watermark_offsets(h.rk, ctopic, C.int32_t(partition),
+		&cLow, &cHigh)
+	if e != C.RD_KAFKA_RESP_ERR_NO_ERROR {
+		return 0, 0, newError(e)
+	}
+
+	low = int64(cLow)
+	high = int64(cHigh)
+
 	return low, high, nil
 }

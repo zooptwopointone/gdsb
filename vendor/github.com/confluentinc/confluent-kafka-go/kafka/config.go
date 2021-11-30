@@ -25,7 +25,7 @@ import (
 
 /*
 #include <stdlib.h>
-#include <librdkafka/rdkafka.h>
+#include "select_rdkafka.h"
 */
 import "C"
 
@@ -33,16 +33,22 @@ import "C"
 //  bool, int, string, any type with the standard String() interface
 type ConfigValue interface{}
 
-// ConfigMap is a map contaning standard librdkafka configuration properties as documented in:
+// ConfigMap is a map containing standard librdkafka configuration properties as documented in:
 // https://github.com/edenhill/librdkafka/tree/master/CONFIGURATION.md
 //
-// The special property "default.topic.config" (optional) is a ConfigMap containing default topic
-// configuration properties.
+// The special property "default.topic.config" (optional) is a ConfigMap
+// containing default topic configuration properties.
+//
+// The use of "default.topic.config" is deprecated,
+// topic configuration properties shall be specified in the standard ConfigMap.
+// For backwards compatibility, "default.topic.config" (if supplied)
+// takes precedence.
 type ConfigMap map[string]ConfigValue
 
 // SetKey sets configuration property key to value.
+//
 // For user convenience a key prefixed with {topic}. will be
-// set on the "default.topic.config" sub-map.
+// set on the "default.topic.config" sub-map, this use is deprecated.
 func (m ConfigMap) SetKey(key string, value ConfigValue) error {
 	if strings.HasPrefix(key, "{topic}.") {
 		_, found := m["default.topic.config"]
@@ -62,7 +68,7 @@ func (m ConfigMap) SetKey(key string, value ConfigValue) error {
 func (m ConfigMap) Set(kv string) error {
 	i := strings.Index(kv, "=")
 	if i == -1 {
-		return Error{ErrInvalidArg, "Expected key=value"}
+		return newErrorFromString(ErrInvalidArg, "Expected key=value")
 	}
 
 	k := kv[:i]
@@ -99,15 +105,19 @@ type rdkAnyconf interface {
 	set(cKey *C.char, cVal *C.char, cErrstr *C.char, errstrSize int) C.rd_kafka_conf_res_t
 }
 
-func anyconfSet(anyconf rdkAnyconf, key string, value string) (err error) {
+func anyconfSet(anyconf rdkAnyconf, key string, val ConfigValue) (err error) {
+	value, errstr := value2string(val)
+	if errstr != "" {
+		return newErrorFromString(ErrInvalidArg, fmt.Sprintf("%s for key %s (expected string,bool,int,ConfigMap)", errstr, key))
+	}
 	cKey := C.CString(key)
+	defer C.free(unsafe.Pointer(cKey))
 	cVal := C.CString(value)
+	defer C.free(unsafe.Pointer(cVal))
 	cErrstr := (*C.char)(C.malloc(C.size_t(128)))
 	defer C.free(unsafe.Pointer(cErrstr))
 
 	if anyconf.set(cKey, cVal, cErrstr, 128) != C.RD_KAFKA_CONF_OK {
-		C.free(unsafe.Pointer(cKey))
-		C.free(unsafe.Pointer(cVal))
 		return newErrorFromCString(C.RD_KAFKA_RESP_ERR__INVALID_ARG, cErrstr)
 	}
 
@@ -128,14 +138,25 @@ func (ctopicConf *rdkTopicConf) set(cKey *C.char, cVal *C.char, cErrstr *C.char,
 }
 
 func configConvertAnyconf(m ConfigMap, anyconf rdkAnyconf) (err error) {
-
+	// set plugins first, any plugin-specific configuration depends on
+	// the plugin to have already been set
+	pluginPaths, ok := m["plugin.library.paths"]
+	if ok {
+		err = anyconfSet(anyconf, "plugin.library.paths", pluginPaths)
+		if err != nil {
+			return err
+		}
+	}
 	for k, v := range m {
+		if k == "plugin.library.paths" {
+			continue
+		}
 		switch v.(type) {
 		case ConfigMap:
 			/* Special sub-ConfigMap, only used for default.topic.config */
 
 			if k != "default.topic.config" {
-				return Error{ErrInvalidArg, fmt.Sprintf("Invalid type for key %s", k)}
+				return newErrorFromString(ErrInvalidArg, fmt.Sprintf("Invalid type for key %s", k))
 			}
 
 			var cTopicConf = C.rd_kafka_topic_conf_new()
@@ -152,12 +173,7 @@ func configConvertAnyconf(m ConfigMap, anyconf rdkAnyconf) (err error) {
 				(*C.rd_kafka_topic_conf_t)((*rdkTopicConf)(cTopicConf)))
 
 		default:
-			val, errstr := value2string(v)
-			if errstr != "" {
-				return Error{ErrInvalidArg, fmt.Sprintf("%s for key %s (expected string,bool,int,ConfigMap)", errstr, k)}
-			}
-
-			err = anyconfSet(anyconf, k, val)
+			err = anyconfSet(anyconf, k, v)
 			if err != nil {
 				return err
 			}
@@ -170,6 +186,11 @@ func configConvertAnyconf(m ConfigMap, anyconf rdkAnyconf) (err error) {
 // convert ConfigMap to C rd_kafka_conf_t *
 func (m ConfigMap) convert() (cConf *C.rd_kafka_conf_t, err error) {
 	cConf = C.rd_kafka_conf_new()
+
+	// Set the client.software.name and .version (use librdkafka version).
+	_, librdkafkaVersion := LibraryVersion()
+	anyconfSet((*rdkConf)(cConf), "client.software.name", "confluent-kafka-go")
+	anyconfSet((*rdkConf)(cConf), "client.software.version", librdkafkaVersion)
 
 	err = configConvertAnyconf(m, (*rdkConf)(cConf))
 	if err != nil {
@@ -197,7 +218,7 @@ func (m ConfigMap) get(key string, defval ConfigValue) (ConfigValue, error) {
 	}
 
 	if defval != nil && reflect.TypeOf(defval) != reflect.TypeOf(v) {
-		return nil, Error{ErrInvalidArg, fmt.Sprintf("%s expects type %T, not %T", key, defval, v)}
+		return nil, newErrorFromString(ErrInvalidArg, fmt.Sprintf("%s expects type %T, not %T", key, defval, v))
 	}
 
 	return v, nil
@@ -214,6 +235,40 @@ func (m ConfigMap) extract(key string, defval ConfigValue) (ConfigValue, error) 
 	delete(m, key)
 
 	return v, nil
+}
+
+// extractLogConfig extracts generic go.logs.* configuration properties.
+func (m ConfigMap) extractLogConfig() (logsChanEnable bool, logsChan chan LogEvent, err error) {
+	v, err := m.extract("go.logs.channel.enable", false)
+	if err != nil {
+		return
+	}
+
+	logsChanEnable = v.(bool)
+
+	v, err = m.extract("go.logs.channel", nil)
+	if err != nil {
+		return
+	}
+
+	if v != nil {
+		logsChan = v.(chan LogEvent)
+	}
+
+	if logsChanEnable {
+		// Tell librdkafka to forward logs to the log queue
+		m.Set("log.queue=true")
+	}
+
+	return
+}
+
+func (m ConfigMap) clone() ConfigMap {
+	m2 := make(ConfigMap)
+	for k, v := range m {
+		m2[k] = v
+	}
+	return m2
 }
 
 // Get finds the given key in the ConfigMap and returns its value.

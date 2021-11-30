@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
-	"github.com/rewati/gdsb"
+	"github.com/zooptwopointone/gdsb"
 )
 
 var c = struct {

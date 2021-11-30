@@ -24,7 +24,7 @@ import (
 
 /*
 #include <stdlib.h>
-#include <librdkafka/rdkafka.h>
+#include "select_rdkafka.h"
 #include "glue_rdkafka.h"
 
 
@@ -117,6 +117,8 @@ func (e RevokedPartitions) String() string {
 }
 
 // PartitionEOF consumer reached end of partition
+// Needs to be explicitly enabled by setting the `enable.partition.eof`
+// configuration property to true.
 type PartitionEOF TopicPartition
 
 func (p PartitionEOF) String() string {
@@ -131,6 +133,16 @@ type OffsetsCommitted struct {
 
 func (o OffsetsCommitted) String() string {
 	return fmt.Sprintf("OffsetsCommitted (%v, %v)", o.Error, o.Offsets)
+}
+
+// OAuthBearerTokenRefresh indicates token refresh is required
+type OAuthBearerTokenRefresh struct {
+	// Config is the value of the sasl.oauthbearer.config property
+	Config string
+}
+
+func (o OAuthBearerTokenRefresh) String() string {
+	return "OAuthBearerTokenRefresh"
 }
 
 // eventPoll polls an event from the handler's C rd_kafka_queue_t,
@@ -167,58 +179,12 @@ out:
 
 		case C.RD_KAFKA_EVENT_REBALANCE:
 			// Consumer rebalance event
-			// If the app provided a RebalanceCb to Subscribe*() or
-			// has go.application.rebalance.enable=true we create an event
-			// and forward it to the application thru the RebalanceCb or the
-			// Events channel respectively.
-			// Since librdkafka requires the rebalance event to be "acked" by
-			// the application to synchronize state we keep track of if the
-			// application performed Assign() or Unassign(), but this only works for
-			// the non-channel case. For the channel case we assume the application
-			// calls Assign() / Unassign().
-			// Failure to do so will "hang" the consumer, e.g., it wont start consuming
-			// and it wont close cleanly, so this error case should be visible
-			// immediately to the application developer.
-			appReassigned := false
-			if C.rd_kafka_event_error(rkev) == C.RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS {
-				if h.currAppRebalanceEnable {
-					// Application must perform Assign() call
-					var ev AssignedPartitions
-					ev.Partitions = newTopicPartitionsFromCparts(C.rd_kafka_event_topic_partition_list(rkev))
-					if channel != nil || h.c.rebalanceCb == nil {
-						retval = ev
-						appReassigned = true
-					} else {
-						appReassigned = h.c.rebalance(ev)
-					}
-				}
-
-				if !appReassigned {
-					C.rd_kafka_assign(h.rk, C.rd_kafka_event_topic_partition_list(rkev))
-				}
-			} else {
-				if h.currAppRebalanceEnable {
-					// Application must perform Unassign() call
-					var ev RevokedPartitions
-					ev.Partitions = newTopicPartitionsFromCparts(C.rd_kafka_event_topic_partition_list(rkev))
-					if channel != nil || h.c.rebalanceCb == nil {
-						retval = ev
-						appReassigned = true
-					} else {
-						appReassigned = h.c.rebalance(ev)
-					}
-				}
-
-				if !appReassigned {
-					C.rd_kafka_assign(h.rk, nil)
-				}
-			}
+			retval = h.c.handleRebalanceEvent(channel, rkev)
 
 		case C.RD_KAFKA_EVENT_ERROR:
 			// Error event
 			cErr := C.rd_kafka_event_error(rkev)
-			switch cErr {
-			case C.RD_KAFKA_RESP_ERR__PARTITION_EOF:
+			if cErr == C.RD_KAFKA_RESP_ERR__PARTITION_EOF {
 				crktpar := C.rd_kafka_event_topic_partition(rkev)
 				if crktpar == nil {
 					break
@@ -229,7 +195,21 @@ out:
 				setupTopicPartitionFromCrktpar((*TopicPartition)(&peof), crktpar)
 
 				retval = peof
-			default:
+
+			} else if int(C.rd_kafka_event_error_is_fatal(rkev)) != 0 {
+				// A fatal error has been raised.
+				// Extract the actual error from the client
+				// instance and return a new Error with
+				// fatal set to true.
+				cFatalErrstrSize := C.size_t(512)
+				cFatalErrstr := (*C.char)(C.malloc(cFatalErrstrSize))
+				defer C.free(unsafe.Pointer(cFatalErrstr))
+				cFatalErr := C.rd_kafka_fatal_error(h.rk, cFatalErrstr, cFatalErrstrSize)
+				fatalErr := newErrorFromCString(cFatalErr, cFatalErrstr)
+				fatalErr.fatal = true
+				retval = fatalErr
+
+			} else {
 				retval = newErrorFromCString(cErr, C.rd_kafka_event_error_string(rkev))
 			}
 
@@ -294,6 +274,10 @@ out:
 			} else {
 				retval = OffsetsCommitted{nil, offsets}
 			}
+
+		case C.RD_KAFKA_EVENT_OAUTHBEARER_TOKEN_REFRESH:
+			ev := OAuthBearerTokenRefresh{C.GoString(C.rd_kafka_event_config_string(rkev))}
+			retval = ev
 
 		case C.RD_KAFKA_EVENT_NONE:
 			// poll timed out: no events available
